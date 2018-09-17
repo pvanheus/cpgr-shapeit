@@ -1,0 +1,9 @@
+categories: [Sequence Analysis]
+description: SHAPEIT method for haplotype estimate (CPGR-customised version)
+long_description: |
+  SHAPEIT is a fast and accurate method for estimation of haplotypes (aka phasing) from genotype or sequencing data.
+  Based on the wrapper from Christian Schudoma - https://github.com/cschu/shapeit
+remote_repository_url: https://github.com/CPGRZA/cpgr_ancestry
+type: unrestricted
+name: shapeit_phase
+owner: sanbi-uwc
