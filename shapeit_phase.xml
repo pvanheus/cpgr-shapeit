@@ -1,6 +1,5 @@
-<tool id="shapeit_phase" name="shapeit_phase" version="0.6.0">
+<tool id="shapeit_phase" name="shapeit_phase" version="0.19.0">
     <description>genomic data with or without reference panel</description>
-
     <requirements>
         <requirement type="package" version="2.r837">shapeit</requirement>
     </requirements>
@@ -8,40 +7,8 @@
         <exit_code range="1:" />
     </stdio>
 
-    <command><![CDATA[
-        #if str($use_ref_panel.use_ref_panel_select) == "use_ref_panel_yes" and str($use_ref_panel.ref_panel_from_table.ref_panel_from_table_select) == "ref_panel_from_table_yes" and str($input_files.input_type_select) == 'plink_bed_bim_fam_list':
-          PART=`head -1 myfile.bim | cut -f1` && 
-          echo "Working on PART: $PART" &&
-          REF_DIR='${use_genetic_map.genetic_map_from_table.map_from_table.fields.path}' &&
-          REF_PREFIX='${use_genetic_map.genetic_map_from_table.map_from_table.fields.reference_prefix}' &&
-          SAMPLE_PREFIX="\$REF_DIR/${use_genetic_map.genetic_map_from_table.map_from_table.fields.sample_prefix}" &&
-          SAMPLE=`ls \$SAMPLE_PREFIX*.sample` &&
-          if [ ! -f "\$SAMPLE" ] ; then
-            echo "Failed to find valid sample file at \$SAMPLE" >&2 && 
-            exit 1 ;
-          fi &&
-          HAP="\${REF_DIR}/\${REF_PREFIX}\${PART}.hap.gz" &&
-          if [ -f "\$HAP" ] ; then
-            echo "Failed to find valid .hap file at \$HAP" >&2 &&
-            exit 1 ;
-          fi &&
-          LEGEND="\${REF_DIR}/\${REF_PREFIX}\${PART}.legend.gz" &&
-          if [ -f "\$LEGEND ] ; then 
-            echo "Failed to find valid .legend file at \$LEGEND" >&2 &&
-            exit 1 ;
-          fi &&
-          MAP_PREFIX='${use_genetic_map.genetic_map_from_table.map_from_table.fields.map_prefix}' &&
-          MAP=`ls \${REF_DIR}/\${MAP_PREFIX}\${PART}_*` &&
-          if [ ! -f "\${MAP}" ] ; then
-            echo "Failed to find valid map file at \${MAP}" >&2 &&
-            exit 1 ; 
-          fi &&
-        #end if
-        #if $input_files.input_type_select == "plink_bed_bim_fam_list":
-          echo "COLLECTION NAME:" ${input_files.plink_bed_etc_list.name} &&
-          #for $dat in $input_files.plink_bed_etc_list:
-             echo NAME '${dat.name}' &&
-          #end for
+    <command detect_errors="aggressive"><![CDATA[
+        #if str($input_files.input_type_select) == 'plink_bed_bim_fam_list':
           ln -s '${input_files.plink_bed_etc_list[0]}' input.plink_bed &&
           ln -s '${input_files.plink_bed_etc_list[1]}' input.plink_bim && 
           ln -s '${input_files.plink_bed_etc_list[2]}' input.plink_fam &&
@@ -51,9 +18,53 @@
           head -2 input.plink_bim && 
           echo "FAM file" &&
           head -2 input.plink_fam &&
+          PART=`head -1 input.plink_bim | cut -f1` && 
+          echo "Working on PART: \$PART" &&
+        #else
+          PART=''
+        #end if 
+        #if str($use_ref_panel.use_ref_panel_select) == "use_ref_panel_yes" and str($use_ref_panel.ref_panel_from_table.ref_panel_from_table_select) == "ref_panel_from_table_yes":
+          REF_DIR='${use_ref_panel.ref_panel_from_table.ref_from_table.fields.path}' &&
+          REF_PREFIX='${use_ref_panel.ref_panel_from_table.ref_from_table.fields.reference_prefix}' &&
+          SAMPLE_PREFIX="\$REF_DIR/${use_ref_panel.ref_panel_from_table.ref_from_table.fields.sample_prefix}" &&
+          SAMPLE=`ls \$SAMPLE_PREFIX*.sample` &&
+          if [ ! -f "\$SAMPLE" ] ; then
+            echo "Failed to find valid sample file at \$SAMPLE" >&2 && 
+            exit 1 ;
+          fi &&
+          HAP="\${REF_DIR}/\${REF_PREFIX}\${PART}.hap.gz" &&
+          if [ ! -f "\$HAP" ] ; then
+            echo "Failed to find valid .hap file at \$HAP" >&2 &&
+            exit 1 ;
+          fi &&
+          LEGEND="\${REF_DIR}/\${REF_PREFIX}\${PART}.legend.gz" &&
+          if [ ! -f "\$LEGEND" ] ; then 
+            echo "Failed to find valid .legend file at \$LEGEND" >&2 &&
+            exit 1 ;
+          fi &&
+        #end if
+        #if $use_genetic_map.use_genetic_map_select == "use_genetic_map_yes" and $use_genetic_map.genetic_map_from_table.genetic_map_from_table_select == "genetic_map_from_table_yes":
+          MAP_DIR='${use_genetic_map.genetic_map_from_table.map_from_table.fields.path}' &&
+          MAP_PREFIX='${use_genetic_map.genetic_map_from_table.map_from_table.fields.map_prefix}' &&
+          MAP=`ls \${MAP_DIR}/\${MAP_PREFIX}\${PART}_*` &&
+          if [ ! -f "\${MAP}" ] ; then
+            echo "Failed to find valid map file at \${MAP}" >&2 &&
+            exit 1 ; 
+          fi &&
+        #end if
+        #if $input_files.input_type_select == "plink_bed_bim_fam_list":
+          echo "COLLECTION NAME:" ${input_files.plink_bed_etc_list.name} &&
+          #for $dat in $input_files.plink_bed_etc_list:
+             echo Processing NAME '${dat.name}' &&
+          #end for
         #end if
 
         shapeit
+        --thread \${GALAXY_SLOTS:-1}
+
+        #if $check_mode != "":
+          -check
+        #end if
 
         #if $input_files.input_type_select == "vcf":
           --input-vcf ${input_files.vcf_file}
@@ -117,14 +128,15 @@
           #else if $use_filters.filter_individuals == "include_individuals":
             --include-ind $use_filters.include_inviduals_file
           #end if
-          #if $use_filters.filter_individuals == "exclude_SNPs":
-            --exclude-snp $use_filters.exclude_SNPs_file
-          #else if $use_filters.filter_SNPs == "include_SNPs":
-            --include-snp $use_filters.include_SNPs_file
+          #if $use_filters.filter_SNPs.filter_SNPs_select == "exclude_SNPs":
+            --exclude-snp $use_filters.filter_SNPs.exclude_SNPs_file
+          #else if $use_filters.filter_SNPs.filter_SNPs_select  == "include_SNPs":
+            --include-snp $use_filters.filter_SNPs.include_SNPs_file
           #end if
         #end if
 
         #if $use_advanced_parameters.use_advanced_parameters_select == "use_advanced_parameters_yes":
+          $use_advanced_parameters.duohmm
           #if $use_advanced_parameters.chrX == "chrX_yes":
             --chrX
           #end if
@@ -165,12 +177,22 @@
             --seed $use_advanced_parameters.rng_seed
           #end if
         #end if
-        --output-max $out_haps $out_sample
-        --output-graph $out_graph
-        --output-log $out_log
-    ]]></command>
 
+        #if $check_mode == "":
+          --output-max $out_haps $out_sample
+          --output-graph $out_graph
+          --output-log $out_log
+        #else
+          --output-log output
+          | grep -v 'ERROR:.* Reference and Main panels are not well aligned:'
+          ; mv output.log $out_log
+          && mv output.snp.strand $out_strand
+          && mv output.snp.strand.exclude $out_exclude
+        #end if
+        # NOTE that in check mode we are ignoring the error related to panel misalignment
+    ]]></command>
     <inputs>
+      <param name="check_mode" type="boolean" truevalue="-check" falsevalue="" label="Run in -check mode (check data)" />
       <conditional name="input_files">
         <param name="input_type_select" type="select" label="Please specify your input files.">
           <option value="vcf" selected="True">VCF Variant Call Format</option>
@@ -215,7 +237,7 @@
             </param>
             <when value="genetic_map_from_table_yes">
               <param name="map_from_table" type="select" label="Select reference map">
-                <options from_data_table="shapeit_ref" />
+                <options from_data_table="shapeit2_ref" />
               </param>
             </when>
             <when value="genetic_map_from_table_no">
@@ -241,7 +263,7 @@
             </param>
             <when value="ref_panel_from_table_yes">
               <param name="ref_from_table" type="select" label="Select reference panel">
-                <options from_data_table="shapeit_ref" />
+                <options from_data_table="shapeit2_ref" />
               </param>
             </when>
             <when value="ref_panel_from_table_no">            
@@ -286,6 +308,7 @@
         </param>
 
         <when value="use_advanced_parameters_yes">
+          <param argument="--duohmm" type="boolean" truevalue="--duohmm" falsevalue="" />
           <param name="chrX" type="select" label="Use X chromosomal genotypes?">
             <option value="chrX_yes">Yes</option>
             <option value="chrX_no" selected="True">No</option>
@@ -405,16 +428,16 @@
 
           <conditional name="filter_SNPs">
             <param name="filter_SNPs_select" type="select" label="Do you want to filter SNPs?">
-              <option value="no_individual_filter" selected="True">No filtering</option>
+              <option value="no_SNPs_filter" selected="True">No filtering</option>
               <option value="exclude_SNPs">Exclude list of SNPs</option>
               <option value="include_SNPs">Limit list of SNPs</option>
             </param>
             <when value="no_individual_filter"></when>
             <when value="exclude_SNPs">
-              <param name="exclude_inviduals_file" type="data" format="txt" label="Specify file with excluded SNPs (.exc)"/>
+              <param name="exclude_SNPs_file" type="data" format="txt" label="Specify file with excluded SNPs (.exc)"/>
             </when>
             <when value="include_SNPs">
-              <param name="include_inviduals_file" type="data" format="txt" label="Specify file with limited SNPs (.inc)"/>
+              <param name="include_SNPs_file" type="data" format="txt" label="Specify file with limited SNPs (.inc)"/>
             </when>
           </conditional>
         </when>
@@ -423,9 +446,21 @@
 
     </inputs>
     <outputs>
-      <data name="out_haps" format="tabular" label="${tool.name} on ${on_string} haplotypes (.haps)"/>
-      <data name="out_sample" format="tabular" label="${tool.name} on ${on_string} additional information (.sample)"/>
-      <data name="out_graph" format="txt" label="${tool.name} on ${on_string} haplotype graphs (.hgraph)"/>
+      <data name="out_haps" format="tabular" label="${tool.name} on ${on_string} haplotypes (.haps)">
+        <filter>not check_mode</filter>
+      </data>
+      <data name="out_sample" format="tabular" label="${tool.name} on ${on_string} additional information (.sample)">
+        <filter>not check_mode</filter>
+      </data>
+      <data name="out_graph" format="txt" label="${tool.name} on ${on_string} haplotype graphs (.hgraph)">
+        <filter>not check_mode</filter>
+      </data>
+      <data name="out_strand" format="tabular" label="${tool.name} on ${on_string} problematic SNP report (.strand)">
+        <filter>check_mode</filter>
+      </data>
+      <data name="out_exclude" format="txt" label="${tool.name} on ${on_string} problematic SNPs to exclude (.exclude)">
+        <filter>check_mode</filter>
+      </data>
       <data name="out_log" format="txt" label="${tool.name} on ${on_string} logfile (.log)"/>
     </outputs>
     <help><![CDATA[
